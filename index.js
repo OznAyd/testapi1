@@ -11,9 +11,11 @@ const BASE_URL =
 
 const TOKEN = process.env.TOKEN || "497a346e4545652b356d72364e773d3d";
 
-// cache
+// =====================
+// CACHE
+// =====================
 const cache = new Map();
-const CACHE_TTL = 1000 * 60 * 60 * 6;
+const CACHE_TTL = 1000 * 60 * 60 * 6; // 6 saat
 
 function setCache(key, data) {
   cache.set(key, { data, time: Date.now() });
@@ -22,14 +24,18 @@ function setCache(key, data) {
 function getCache(key) {
   const item = cache.get(key);
   if (!item) return null;
+
   if (Date.now() - item.time > CACHE_TTL) {
     cache.delete(key);
     return null;
   }
+
   return item.data;
 }
 
-// TÜRKÇE SAFE NORMALIZATION (EN ÖNEMLİ KISIM)
+// =====================
+// NORMALIZE (TR SAFE)
+// =====================
 function normalize(text) {
   if (!text) return "";
 
@@ -44,7 +50,9 @@ function normalize(text) {
     .replace(/ğ/g, "g");
 }
 
-// external API
+// =====================
+// EXTERNAL API
+// =====================
 async function fetchPharmacies(district) {
   const response = await axios.post(
     BASE_URL,
@@ -65,54 +73,18 @@ async function fetchPharmacies(district) {
   return response.data;
 }
 
-/* =========================
-   ROUTES
-========================= */
+// =====================
+// ROUTES
+// =====================
 
-// health
+// HEALTH CHECK
 app.get("/health", (req, res) => {
   res.send("OK");
 });
-app.get("/api/pharmacies", async (req, res) => {
-  try {
-    const district = req.query.district;
 
-    if (!district) {
-      return res.status(400).json({
-        success: false,
-        message: "district param required",
-      });
-    }
-
-    const response = await axios.post(
-      BASE_URL,
-      new URLSearchParams({
-        jx: "1",
-        islem: "get_ilce_eczane",
-        ilce: district,
-        h: TOKEN,
-      }),
-      {
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          "X-Requested-With": "XMLHttpRequest",
-        },
-      }
-    );
-
-    res.json({
-      success: true,
-      data: response.data,
-    });
-  } catch (err) {
-    res.status(500).json({
-      success: false,
-      error: err.message,
-    });
-  }
-});
-
-// ✅ FIXED ROUTE (QUERY PARAM)
+// =====================
+// MAIN API (FIXED)
+// =====================
 app.get("/api/pharmacies", async (req, res) => {
   try {
     let district = req.query.district;
@@ -130,27 +102,35 @@ app.get("/api/pharmacies", async (req, res) => {
     const cached = getCache(cacheKey);
 
     if (cached) {
-      return res.json({ success: true, source: "cache", data: cached });
+      return res.json({
+        success: true,
+        source: "cache",
+        data: cached,
+      });
     }
 
     const data = await fetchPharmacies(district);
 
     setCache(cacheKey, data);
 
-    res.json({
+    return res.json({
       success: true,
       source: "live",
       data,
     });
   } catch (err) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: err.message,
     });
   }
 });
 
+// =====================
+// START SERVER
+// =====================
 const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => {
-  console.log("API running on", PORT);
+  console.log("Eczane API running on port", PORT);
 });
