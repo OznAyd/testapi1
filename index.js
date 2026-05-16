@@ -11,12 +11,11 @@ const BASE_URL =
 
 const TOKEN = process.env.TOKEN || "497a346e4545652b356d72364e773d3d";
 
-// =====================
-// CACHE
-// =====================
+// cache
 const cache = new Map();
-const CACHE_TTL = 1000 * 60 * 60 * 6; // 6 saat
+const CACHE_TTL = 1000 * 60 * 60 * 6;
 
+// cache helpers
 function setCache(key, data) {
   cache.set(key, { data, time: Date.now() });
 }
@@ -24,18 +23,14 @@ function setCache(key, data) {
 function getCache(key) {
   const item = cache.get(key);
   if (!item) return null;
-
   if (Date.now() - item.time > CACHE_TTL) {
     cache.delete(key);
     return null;
   }
-
   return item.data;
 }
 
-// =====================
-// NORMALIZE (TR SAFE)
-// =====================
+// Türkçe normalize
 function normalize(text) {
   if (!text) return "";
 
@@ -50,9 +45,7 @@ function normalize(text) {
     .replace(/ğ/g, "g");
 }
 
-// =====================
-// EXTERNAL API
-// =====================
+// external API
 async function fetchPharmacies(district) {
   const response = await axios.post(
     BASE_URL,
@@ -73,18 +66,16 @@ async function fetchPharmacies(district) {
   return response.data;
 }
 
-// =====================
-// ROUTES
-// =====================
-
-// HEALTH CHECK
+// ========================
+// HEALTH
+// ========================
 app.get("/health", (req, res) => {
-  res.send("OK");
+  res.json({ status: "ok" });
 });
 
-// =====================
-// MAIN API (FIXED)
-// =====================
+// ========================
+// MAIN API (TEK ROUTE)
+// ========================
 app.get("/api/pharmacies", async (req, res) => {
   try {
     let district = req.query.district;
@@ -92,14 +83,14 @@ app.get("/api/pharmacies", async (req, res) => {
     if (!district) {
       return res.status(400).json({
         success: false,
-        message: "district param required",
+        message: "district required",
       });
     }
 
     district = decodeURIComponent(district);
 
-    const cacheKey = normalize(district);
-    const cached = getCache(cacheKey);
+    const key = normalize(district);
+    const cached = getCache(key);
 
     if (cached) {
       return res.json({
@@ -111,26 +102,22 @@ app.get("/api/pharmacies", async (req, res) => {
 
     const data = await fetchPharmacies(district);
 
-    setCache(cacheKey, data);
+    setCache(key, data);
 
     return res.json({
       success: true,
       source: "live",
       data,
     });
-  } catch (err) {
+  } catch (e) {
     return res.status(500).json({
       success: false,
-      error: err.message,
+      error: e.message,
     });
   }
 });
 
-// =====================
-// START SERVER
-// =====================
 const PORT = process.env.PORT || 3000;
-
 app.listen(PORT, () => {
   console.log("Eczane API running on port", PORT);
 });
