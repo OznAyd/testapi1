@@ -1,8 +1,3 @@
-// ================================
-// NÖBETÇİ ECZANE BACKEND (PRODUCTION READY)
-// ONE-CLICK DEPLOY (Render / Railway)
-// ================================
-
 const express = require("express");
 const axios = require("axios");
 const cors = require("cors");
@@ -11,15 +6,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ================================
-// CONFIG
-// ================================
-const BASE_URL = "https://www.istanbuleczaciodasi.org.tr/nobetci-eczane/index.php";
+const BASE_URL =
+  "https://www.istanbuleczaciodasi.org.tr/nobetci-eczane/index.php";
+
 const TOKEN = process.env.TOKEN || "497a346e4545652b356d72364e773d3d";
 
-// simple in-memory cache (Render free tier friendly)
+// cache
 const cache = new Map();
-const CACHE_TTL = 1000 * 60 * 60 * 6; // 6 hours
+const CACHE_TTL = 1000 * 60 * 60 * 6;
 
 function setCache(key, data) {
   cache.set(key, { data, time: Date.now() });
@@ -35,9 +29,22 @@ function getCache(key) {
   return item.data;
 }
 
-// ================================
-// EXTERNAL API CALL
-// ================================
+// TÜRKÇE SAFE NORMALIZATION (EN ÖNEMLİ KISIM)
+function normalize(text) {
+  if (!text) return "";
+
+  return decodeURIComponent(text)
+    .trim()
+    .toLowerCase()
+    .replace(/i̇/g, "i")
+    .replace(/ü/g, "u")
+    .replace(/ö/g, "o")
+    .replace(/ç/g, "c")
+    .replace(/ş/g, "s")
+    .replace(/ğ/g, "g");
+}
+
+// external API
 async function fetchPharmacies(district) {
   const response = await axios.post(
     BASE_URL,
@@ -58,23 +65,35 @@ async function fetchPharmacies(district) {
   return response.data;
 }
 
-// ================================
-// ROUTES
-// ================================
+/* =========================
+   ROUTES
+========================= */
 
-// Health check
+// health
 app.get("/health", (req, res) => {
-  res.json({ status: "ok" });
+  res.send("OK");
 });
 
-// Get district pharmacies
-app.get("/api/pharmacies/:district", async (req, res) => {
+// ✅ FIXED ROUTE (QUERY PARAM)
+app.get("/api/pharmacies", async (req, res) => {
   try {
-    const district = req.params.district;
+    let district = req.query.district;
 
-    const cacheKey = `district_${district}`;
+    if (!district) {
+      return res.status(400).json({
+        success: false,
+        message: "district param required",
+      });
+    }
+
+    district = decodeURIComponent(district);
+
+    const cacheKey = normalize(district);
     const cached = getCache(cacheKey);
-    if (cached) return res.json(cached);
+
+    if (cached) {
+      return res.json({ success: true, source: "cache", data: cached });
+    }
 
     const data = await fetchPharmacies(district);
 
@@ -82,7 +101,7 @@ app.get("/api/pharmacies/:district", async (req, res) => {
 
     res.json({
       success: true,
-      source: "cache-or-live",
+      source: "live",
       data,
     });
   } catch (err) {
@@ -93,66 +112,7 @@ app.get("/api/pharmacies/:district", async (req, res) => {
   }
 });
 
-// City endpoint (optional)
-app.get("/api/city/:city", async (req, res) => {
-  try {
-    const city = req.params.city;
-
-    const response = await axios.post(
-      BASE_URL,
-      new URLSearchParams({
-        jx: "1",
-        islem: "get_il_eczane",
-        il: city,
-        h: TOKEN,
-      })
-    );
-
-    res.json({ success: true, data: response.data });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// ================================
-// START SERVER
-// ================================
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Eczane API running on port ${PORT}`);
+  console.log("API running on", PORT);
 });
-
-// ================================
-// PACKAGE.JSON (for deploy)
-// ================================
-/*
-{
-  "name": "eczane-api",
-  "version": "1.0.0",
-  "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
-  },
-  "dependencies": {
-    "axios": "^1.6.0",
-    "cors": "^2.8.5",
-    "express": "^4.18.2"
-  }
-}
-*/
-
-// ================================
-// RENDER DEPLOY INSTRUCTIONS
-// ================================
-/*
-1. GitHub repo oluştur
-2. Bu dosyayı index.js olarak koy
-3. package.json ekle
-4. Render.com aç
-5. New Web Service
-6. GitHub repo seç
-7. Settings:
-   - Build Command: npm install
-   - Start Command: npm start
-8. Deploy
-*/
