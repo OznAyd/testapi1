@@ -73,6 +73,44 @@ async function fetchPharmacies(district) {
 app.get("/health", (req, res) => {
   res.send("OK");
 });
+app.get("/api/pharmacies", async (req, res) => {
+  try {
+    const district = req.query.district;
+
+    if (!district) {
+      return res.status(400).json({
+        success: false,
+        message: "district param required",
+      });
+    }
+
+    const response = await axios.post(
+      BASE_URL,
+      new URLSearchParams({
+        jx: "1",
+        islem: "get_ilce_eczane",
+        ilce: district,
+        h: TOKEN,
+      }),
+      {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Requested-With": "XMLHttpRequest",
+        },
+      }
+    );
+
+    res.json({
+      success: true,
+      data: response.data,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: err.message,
+    });
+  }
+});
 
 // ✅ FIXED ROUTE (QUERY PARAM)
 app.get("/api/pharmacies", async (req, res) => {
